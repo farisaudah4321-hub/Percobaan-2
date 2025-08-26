@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pelacak Lokasi Real-time</title>
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha512-m2EkS+gwJ1yEh/7zCbt7B1HblIMn0NLOJAAwCEjRkDLpJlX2rZjb5+zwljD7Bk0U0aGkFw4BxQ0d1z9R1sv7iQ=="
+    crossorigin="anonymous"
+  />
+
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+    }
+    #map {
+      width: 100%;
+      height: 90vh;
+    }
+    #controls {
+      padding: 10px;
+    }
+    #errorPanel {
+      background: #fee;
+      color: #900;
+      padding: 6px;
+      font-size: 14px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h2 style="text-align:center">Pelacak Lokasi Real-time</h2>
+
+  <div id="controls">
+    <button id="startBtn">Mulai Pelacakan</button>
+    <button id="stopBtn">Hentikan</button>
+    <button id="shareBtn">Bagikan Lokasi</button>
+  </div>
+
+  <div id="errorPanel"></div>
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script
+    defer
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha512-vMb6IZCxjzAjt59S8TD0zc4S2clAyDY0p70Yy1vAThs9Ih6C4H+BP7ZX5Jfw3HuFX0cYe3A59bwt6sNx0E+6FQ=="
+    crossorigin="anonymous"
+  ></script>
+
+  <script defer>
+    let map, marker, watchId;
+
+    function logError(msg, err) {
+      const panel = document.getElementById("errorPanel");
+      panel.style.display = "block";
+      panel.textContent = msg + (err ? (" → " + err) : "");
+      console.error(msg, err);
+    }
+
+    window.addEventListener("error", (e) => {
+      logError("Global Error", e.message);
+    });
+
+    window.addEventListener("unhandledrejection", (e) => {
+      logError("Unhandled Promise", e.reason);
+    });
+
+    function initMap() {
+      try {
+        map = L.map("map").setView([0, 0], 2);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap contributors',
+        }).addTo(map);
+      } catch (err) {
+        logError("Gagal inisialisasi peta", err);
+      }
+    }
+
+    function startTracking() {
+      if (!navigator.geolocation) {
+        logError("Geolocation tidak didukung browser ini");
+        return;
+      }
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          if (!marker) {
+            marker = L.marker([lat, lng]).addTo(map);
+          } else {
+            marker.setLatLng([lat, lng]);
+          }
+          map.setView([lat, lng], 16);
+        },
+        (err) => logError("Gagal mengambil lokasi", err.message),
+        { enableHighAccuracy: true }
+      );
+    }
+
+    function stopTracking() {
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+    }
+
+    function shareLocation() {
+      if (!marker) {
+        alert("Lokasi belum tersedia");
+        return;
+      }
+      const { lat, lng } = marker.getLatLng();
+      const url = `https://maps.google.com/?q=${lat},${lng}`;
+      navigator.clipboard.writeText(url).then(() => {
+        alert("Link lokasi disalin: " + url);
+      });
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      initMap();
+      document.getElementById("startBtn").addEventListener("click", startTracking);
+      document.getElementById("stopBtn").addEventListener("click", stopTracking);
+      document.getElementById("shareBtn").addEventListener("click", shareLocation);
+    });
+
+    // Daftarkan service worker (akan membutuhkan file sw.js di root repo)
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker
+          .register("/sw.js")
+          .then(() => console.log("Service Worker terdaftar"))
+          .catch((err) => console.warn("SW gagal", err));
+      });
+    }
+  </script>
+</body>
+</html>
